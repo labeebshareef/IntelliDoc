@@ -1,0 +1,37 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+ENV/
+
+# Environment
+.env
+.env.local
+
+# Storage
+storage/uploads/*
+storage/chroma/*
+storage/cache/*
+!storage/uploads/.gitkeep
+!storage/chroma/.gitkeep
+!storage/cache/.gitkeep
+
+# Models
+models/embeddings/*
+models/llm/*
+!models/embeddings/.gitkeep
+!models/llm/.gitkeep
+
+# IDE
+.vscode/
+.idea/
+
+# Logs
+*.log
+
+# Testing
+.coverage
+htmlcov/
