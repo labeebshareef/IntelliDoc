@@ -1,4 +1,4 @@
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional, Union, AsyncGenerator
 import json
 import httpx
 from datetime import datetime
@@ -22,7 +22,7 @@ Please be concise and accurate. If the context doesn't contain relevant informat
         context: List[Dict],
         chat_history: Optional[List[Dict]] = None,
         stream: bool = False
-    ) -> str:
+    ) -> Union[str, AsyncGenerator[str, None]]:
         # Prepare context string
         context_str = "\n\n".join([
             f"[Content {i+1}]: {item['content']}"
@@ -38,14 +38,10 @@ Please be concise and accurate. If the context doesn't contain relevant informat
             ])
         
         # Construct the prompt
-        prompt = f"""{self.system_prompt}
-
-Context:
-{context_str}
-
-{f'Previous conversation:\n{history_str}\n' if history_str else ''}
-User: {question}
-Assistant: """
+        prompt = f"{self.system_prompt}\n\nContext:\n{context_str}\n"
+        if history_str:
+            prompt += f"\nPrevious conversation:\n{history_str}\n"
+        prompt += f"\nUser: {question}\nAssistant: "
         
         # Prepare the request
         url = f"{self.ollama_base_url}/api/generate"
@@ -60,21 +56,22 @@ Assistant: """
             }
         }
         
-        # Make the request to Ollama
         async with httpx.AsyncClient() as client:
             if not stream:
                 response = await client.post(url, json=payload)
                 response_data = response.json()
                 return response_data["response"]
             else:
-                async with client.stream("POST", url, json=payload) as response:
-                    async for line in response.aiter_lines():
-                        if line:
-                            try:
-                                data = json.loads(line)
-                                yield data.get("response", "")
-                            except json.JSONDecodeError:
-                                continue
+                async def stream_response():
+                    async with client.stream("POST", url, json=payload) as response:
+                        async for line in response.aiter_lines():
+                            if line:
+                                try:
+                                    data = json.loads(line)
+                                    yield data.get("response", "")
+                                except json.JSONDecodeError:
+                                    continue
+                return stream_response()
     
     def prepare_context(
         self,

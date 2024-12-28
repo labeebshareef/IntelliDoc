@@ -2,6 +2,7 @@ from fastapi import APIRouter, HTTPException, UploadFile, File, Depends
 from typing import List, Optional
 import os
 from datetime import datetime
+import chardet
 
 from ..models import ProcessedDocument, DocumentMetadata, SearchQuery, SearchResult
 from ..dependencies import get_document_processor
@@ -22,14 +23,30 @@ async def upload_document(
         os.makedirs(upload_dir, exist_ok=True)
         file_path = os.path.join(upload_dir, file.filename)
         
-        # Save uploaded file
-        content = await file.read()
-        with open(file_path, "wb") as f:
-            f.write(content)
-        
         # Read file content
-        with open(file_path, "r", encoding="utf-8") as f:
-            text_content = f.read()
+        content = await file.read()
+        
+        # Detect the file encoding
+        result = chardet.detect(content)
+        encoding = result['encoding'] if result['encoding'] else 'utf-8'
+        
+        try:
+            # Try to decode with detected encoding
+            text_content = content.decode(encoding)
+        except UnicodeDecodeError:
+            # If that fails, try some common encodings
+            encodings = ['utf-8', 'latin1', 'cp1252', 'iso-8859-1']
+            for enc in encodings:
+                try:
+                    text_content = content.decode(enc)
+                    break
+                except UnicodeDecodeError:
+                    continue
+            else:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Could not decode file content. Please ensure it's a valid text file."
+                )
         
         # Prepare metadata
         metadata = DocumentMetadata(
@@ -43,9 +60,6 @@ async def upload_document(
             content=text_content,
             metadata=metadata.dict()
         )
-        
-        # Clean up temporary file
-        os.remove(file_path)
         
         return ProcessedDocument(
             document_id=doc_id,

@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document Chat</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+
+        .upload-section {
+            background-color: white;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .chat-section {
+            background-color: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .chat-messages {
+            height: 400px;
+            overflow-y: auto;
+            border: 1px solid #ddd;
+            padding: 10px;
+            margin-bottom: 20px;
+            border-radius: 4px;
+        }
+
+        .message {
+            margin-bottom: 10px;
+            padding: 8px;
+            border-radius: 4px;
+        }
+
+        .user-message {
+            background-color: #e3f2fd;
+            margin-left: 20%;
+        }
+
+        .assistant-message {
+            background-color: #f5f5f5;
+            margin-right: 20%;
+        }
+
+        .input-group {
+            display: flex;
+            gap: 10px;
+        }
+
+        input[type="text"] {
+            flex-grow: 1;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+
+        button {
+            padding: 8px 16px;
+            background-color: #2196f3;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+
+        button:hover {
+            background-color: #1976d2;
+        }
+
+        .status {
+            margin-top: 10px;
+            color: #666;
+        }
+    </style>
+</head>
+<body>
+    <div class="upload-section">
+        <h2>Upload Document</h2>
+        <input type="file" id="fileInput" accept=".txt,.pdf,.doc,.docx">
+        <button onclick="uploadFile()">Upload</button>
+        <div id="uploadStatus" class="status"></div>
+    </div>
+
+    <div class="chat-section">
+        <h2>Chat</h2>
+        <div class="chat-messages" id="chatMessages"></div>
+        <div class="input-group">
+            <input type="text" id="messageInput" placeholder="Type your message...">
+            <button onclick="sendMessage()">Send</button>
+        </div>
+    </div>
+
+    <script>
+        const API_URL = 'http://localhost:8000';
+        let chatHistory = [];
+
+        async function uploadFile() {
+    const fileInput = document.getElementById('fileInput');
+    const statusDiv = document.getElementById('uploadStatus');
+
+    if (!fileInput.files.length) {
+        statusDiv.textContent = 'Please select a file first';
+        return;
+    }
+
+    const formData = new FormData();
+    formData.append('file', fileInput.files[0]);
+
+    try {
+        statusDiv.textContent = 'Uploading...';
+        const response = await fetch(`${API_URL}/documents/upload`, {
+            method: 'POST',
+            body: formData
+        });
+
+        if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.detail || 'Upload failed');
+        }
+
+        const result = await response.json();
+        statusDiv.textContent = `Upload successful! Document ID: ${result.document_id}`;
+        statusDiv.style.color = '#4caf50';
+        fileInput.value = '';
+    } catch (error) {
+        statusDiv.textContent = `Error: ${error.message}`;
+        statusDiv.style.color = '#f44336';
+    }
+}
+        async function sendMessage() {
+            const messageInput = document.getElementById('messageInput');
+            const message = messageInput.value.trim();
+
+            if (!message) return;
+
+            // Add user message to chat
+            addMessageToChat('user', message);
+            messageInput.value = '';
+
+            // Prepare chat history
+            chatHistory.push({ role: 'user', content: message });
+
+            try {
+                const response = await fetch(`${API_URL}/chat`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        messages: chatHistory
+                    })
+                });
+
+                if (!response.ok) throw new Error('Failed to get response');
+
+                const result = await response.json();
+                const assistantMessage = result.response;
+                
+                // Add assistant's response to chat
+                addMessageToChat('assistant', assistantMessage);
+                chatHistory.push({ role: 'assistant', content: assistantMessage });
+            } catch (error) {
+                addMessageToChat('assistant', `Error: ${error.message}`);
+            }
+        }
+
+        function addMessageToChat(role, content) {
+            const chatMessages = document.getElementById('chatMessages');
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${role}-message`;
+            messageDiv.textContent = content;
+            chatMessages.appendChild(messageDiv);
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+        }
+
+        // Handle Enter key in message input
+        document.getElementById('messageInput').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                sendMessage();
+            }
+        });
+    </script>
+</body>
+</html>
